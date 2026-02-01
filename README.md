@@ -1,6 +1,6 @@
 # Tasmota MiElHVAC Integration
 
-> ⚠️ **Work in Progress** - This integration is currently under active development
+> ⚠️ **Work in Progress** - This integration is currently under development
 
 Home Assistant custom integration for **Mitsubishi Electric heat pumps** via Tasmota's **MiElHVAC driver** running on ESP32/ESP8266.
 
@@ -41,7 +41,7 @@ MQTT topics used:
 
 ## Status
 
-🚧 Currently in development - tested with Mitsubishi Electric heat pumps via CN105 connection and Tasmota MiElHVAC driver.
+🚧 Currently in development - slightly tested with Mitsubishi Electric heat pumps via CN105 connection and Tasmota MiElHVAC driver, it might be broken any time.
 
 Feedback and contributions welcome!
 
