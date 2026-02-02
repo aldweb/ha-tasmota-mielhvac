@@ -24,6 +24,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     DOMAIN,
@@ -104,10 +105,38 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         self._attr_name = "Climate"
         self._attr_has_entity_name = True
         
-        # Attach to existing Tasmota device
-        self._attr_device_info = {
-            "identifiers": {("tasmota", self._device_id)},
-        }
+        # Find existing Tasmota device and use its identifiers
+        device_registry = dr.async_get(hass)
+        existing_device = None
+        
+        # Search for device with matching topic
+        for device in device_registry.devices.values():
+            for identifier in device.identifiers:
+                if identifier[0] == "tasmota" and identifier[1] == self._device_id:
+                    existing_device = device
+                    break
+            if existing_device:
+                break
+        
+        if existing_device:
+            # Attach to existing Tasmota device using exact same identifiers
+            _LOGGER.info("Attaching climate to existing device: %s", existing_device.name)
+            self._attr_device_info = {
+                "identifiers": existing_device.identifiers,
+            }
+        else:
+            # Device not found - create standalone or log warning
+            _LOGGER.warning(
+                "Tasmota device %s not found in registry, creating standalone climate entity",
+                self._device_id
+            )
+            # Fallback: create minimal device info
+            self._attr_device_info = {
+                "identifiers": {("tasmota", self._device_id)},
+                "name": f"HVAC {self._device_id}",
+                "manufacturer": "Tasmota",
+                "model": "MiElHVAC",
+            }
         
         # Temperature configuration
         self._attr_temperature_unit = UnitOfTemperature.CELSIUS
