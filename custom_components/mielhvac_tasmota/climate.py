@@ -211,7 +211,7 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                 _LOGGER.debug("Error parsing state for %s: %s", self._device_id, err)
         
         # Subscribe to all topics
-        self._sub_state = await subscription.async_prepare_subscribe_topics(
+        self._sub_state = subscription.async_prepare_subscribe_topics(
             self.hass,
             self._sub_state,
             {
@@ -305,3 +305,4 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
             )
             self._attr_swing_mode = swing_mode
             self.async_write_ha_state()
+            
