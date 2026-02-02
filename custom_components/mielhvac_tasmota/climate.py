@@ -1,31 +1,33 @@
 """
 Climate platform for Tasmota MiElHVAC integration.
+Auto-created entities based on MQTT discovery.
 """
 from __future__ import annotations
 import json
+import logging
 
+from homeassistant.components import mqtt
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
     HVACAction,
 )
+from homeassistant.components.mqtt import subscription
+from homeassistant.components.mqtt.models import ReceiveMessage
 from homeassistant.const import (
-    CONF_NAME,
     UnitOfTemperature,
     ATTR_TEMPERATURE,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.components import mqtt
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     DOMAIN,
-    CONF_DEVICE_ID,
-    CONF_BASE_TOPIC,
-    CONF_MODEL,
+    DEFAULT_MODEL,
     MIN_TEMP,
     MAX_TEMP,
     TEMP_STEP,
@@ -35,10 +37,11 @@ from .const import (
     ACTION_MAP,
     FAN_MODES,
     SWING_V_MODES,
-    SWING_H_MODES,
-    DEFAULT_NAME,
-    DEFAULT_MODEL,
 )
+
+_LOGGER = logging.getLogger(__name__)
+
+SIGNAL_HVAC_DISCOVERED = f"{DOMAIN}_hvac_discovered"
 
 
 async def async_setup_entry(
@@ -46,23 +49,45 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Tasmota MiElHVAC climate from config entry."""
-    async_add_entities([MiElHVACTasmota(hass, config_entry)])
+    """Set up Tasmota MiElHVAC climate entities."""
+    
+    created_entities = {}
+    
+    @callback
+    def async_discover_hvac(device_id: str):
+        """Handle discovery of a new HVAC device."""
+        if device_id in created_entities:
+            _LOGGER.debug("HVAC device %s already created", device_id)
+            return
+        
+        _LOGGER.info("Creating climate entity for %s", device_id)
+        
+        # Create entity
+        entity = MiElHVACTasmota(hass, device_id)
+        created_entities[device_id] = entity
+        
+        # Add to Home Assistant
+        async_add_entities([entity])
+    
+    # Listen for discovery events
+    config_entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            SIGNAL_HVAC_DISCOVERED,
+            async_discover_hvac,
+        )
+    )
 
 
-class MiElHVACTasmota(ClimateEntity):
-    """Representation of a Mitsubishi Electric heat pump via Tasmota MiElHVAC."""
+class MiElHVACTasmota(ClimateEntity, RestoreEntity):
+    """Climate entity auto-created from MQTT discovery."""
 
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, device_id: str) -> None:
         """Initialize the climate device."""
         self.hass = hass
-        self._config_entry = config_entry
-        
-        # Configuration data
-        self._device_id = config_entry.data.get(CONF_DEVICE_ID)
-        self._base_topic = config_entry.data.get(CONF_BASE_TOPIC, self._device_id)
-        self._model = config_entry.data.get(CONF_MODEL, DEFAULT_MODEL)
-        self._name = config_entry.data.get(CONF_NAME, DEFAULT_NAME)
+        self._device_id = device_id
+        self._base_topic = device_id
+        self._model = DEFAULT_MODEL
         
         # Dynamic MQTT topics
         self._topic_avail = f"tele/{self._base_topic}/LWT"
@@ -74,19 +99,15 @@ class MiElHVACTasmota(ClimateEntity):
         self._topic_cmd_swing_h = f"cmnd/{self._base_topic}/HVACSetSwingH"
         self._topic_cmd_fan = f"cmnd/{self._base_topic}/HVACSetFanSpeed"
         
-        # Entity identifiers
+        # Entity configuration
         self._attr_unique_id = f"{self._device_id}_climate"
-        self._attr_name = self._name
+        self._attr_name = "Climate"
         self._attr_has_entity_name = True
         
-        # Device info for registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)},
-            name=self._name,
-            manufacturer="Mitsubishi Electric",
-            model=self._model,
-            sw_version="Tasmota MiElHVAC",
-        )
+        # Attach to existing Tasmota device
+        self._attr_device_info = {
+            "identifiers": {("tasmota", self._device_id)},
+        }
         
         # Temperature configuration
         self._attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -116,22 +137,42 @@ class MiElHVACTasmota(ClimateEntity):
             | ClimateEntityFeature.FAN_MODE
             | ClimateEntityFeature.SWING_MODE
         )
+        
+        # Subscription tracking
+        self._sub_state = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to MQTT topics when added to hass."""
+        # Restore previous state
+        last_state = await self.async_get_last_state()
+        if last_state:
+            if last_state.state in HVAC_MODE_MAP.values():
+                self._attr_hvac_mode = HVACMode(last_state.state)
+            if last_state.attributes.get(ATTR_TEMPERATURE):
+                self._attr_target_temperature = float(
+                    last_state.attributes.get(ATTR_TEMPERATURE)
+                )
+            if last_state.attributes.get("fan_mode"):
+                self._attr_fan_mode = last_state.attributes.get("fan_mode")
+            if last_state.attributes.get("swing_mode"):
+                self._attr_swing_mode = last_state.attributes.get("swing_mode")
+            if last_state.attributes.get("swing_horizontal"):
+                self._swing_h_mode = last_state.attributes.get("swing_horizontal")
+        
+        # Subscribe to topics
+        await self._subscribe_topics()
+
+    async def _subscribe_topics(self):
+        """(Re)Subscribe to MQTT topics."""
         
         @callback
-        def availability_received(msg):
+        def availability_received(msg: ReceiveMessage):
             """Handle availability messages."""
             self._available = msg.payload == "Online"
             self.async_write_ha_state()
         
-        await mqtt.async_subscribe(
-            self.hass, self._topic_avail, availability_received, 1
-        )
-        
         @callback
-        def current_temp_received(msg):
+        def current_temp_received(msg: ReceiveMessage):
             """Handle current temperature updates."""
             try:
                 data = json.loads(msg.payload)
@@ -139,15 +180,11 @@ class MiElHVACTasmota(ClimateEntity):
                 if temp is not None:
                     self._attr_current_temperature = float(temp)
                     self.async_write_ha_state()
-            except (json.JSONDecodeError, ValueError, KeyError):
-                pass
-        
-        await mqtt.async_subscribe(
-            self.hass, self._topic_sensor, current_temp_received, 1
-        )
+            except (json.JSONDecodeError, ValueError, KeyError) as err:
+                _LOGGER.debug("Error parsing temperature for %s: %s", self._device_id, err)
         
         @callback
-        def state_received(msg):
+        def state_received(msg: ReceiveMessage):
             """Handle state updates."""
             try:
                 data = json.loads(msg.payload)
@@ -170,11 +207,37 @@ class MiElHVACTasmota(ClimateEntity):
                     self._swing_h_mode = data["SwingH"]
                 
                 self.async_write_ha_state()
-            except (json.JSONDecodeError, ValueError, KeyError):
-                pass
+            except (json.JSONDecodeError, ValueError, KeyError) as err:
+                _LOGGER.debug("Error parsing state for %s: %s", self._device_id, err)
         
-        await mqtt.async_subscribe(
-            self.hass, self._topic_state, state_received, 1
+        # Subscribe to all topics
+        self._sub_state = await subscription.async_prepare_subscribe_topics(
+            self.hass,
+            self._sub_state,
+            {
+                "availability": {
+                    "topic": self._topic_avail,
+                    "msg_callback": availability_received,
+                    "qos": 1,
+                },
+                "sensor": {
+                    "topic": self._topic_sensor,
+                    "msg_callback": current_temp_received,
+                    "qos": 1,
+                },
+                "state": {
+                    "topic": self._topic_state,
+                    "msg_callback": state_received,
+                    "qos": 1,
+                },
+            },
+        )
+        await subscription.async_subscribe_topics(self.hass, self._sub_state)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unsubscribe when removed."""
+        self._sub_state = subscription.async_unsubscribe_topics(
+            self.hass, self._sub_state
         )
 
     @property
@@ -200,6 +263,8 @@ class MiElHVACTasmota(ClimateEntity):
                 qos=1,
                 retain=False,
             )
+            self._attr_target_temperature = temperature
+            self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new HVAC mode."""
@@ -212,6 +277,8 @@ class MiElHVACTasmota(ClimateEntity):
                 qos=1,
                 retain=False,
             )
+            self._attr_hvac_mode = hvac_mode
+            self.async_write_ha_state()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new fan mode."""
@@ -223,6 +290,8 @@ class MiElHVACTasmota(ClimateEntity):
                 qos=1,
                 retain=False,
             )
+            self._attr_fan_mode = fan_mode
+            self.async_write_ha_state()
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         """Set new vertical swing mode."""
@@ -234,4 +303,5 @@ class MiElHVACTasmota(ClimateEntity):
                 qos=1,
                 retain=False,
             )
-
+            self._attr_swing_mode = swing_mode
+            self.async_write_ha_state()

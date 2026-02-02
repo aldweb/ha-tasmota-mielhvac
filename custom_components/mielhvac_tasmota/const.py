@@ -5,14 +5,7 @@ from homeassistant.components.climate import HVACMode, HVACAction
 
 DOMAIN = "mielhvac_tasmota"
 
-# Configuration keys
-CONF_DEVICE_ID = "device_id"
-CONF_BASE_TOPIC = "base_topic"
-CONF_MODEL = "model"
-
 # Default values
-DEFAULT_NAME = "HVAC"
-DEFAULT_DEVICE_ID = "tasmota_hvac"
 DEFAULT_MODEL = "MiElHVAC"
 
 # Temperature parameters

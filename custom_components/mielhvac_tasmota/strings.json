@@ -2,34 +2,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "Configure Tasmota MiElHVAC",
-        "description": "Set up your Mitsubishi Electric heat pump",
-        "data": {
-          "name": "Device name",
-          "device_id": "Tasmota device ID",
-          "base_topic": "Base MQTT topic",
-          "model": "Model (MiElHVAC)"
-        }
+        "title": "Enable Tasmota MiElHVAC Auto-Discovery",
+        "description": "This will automatically discover HVAC devices publishing to tele/+/HVACSETTINGS and create climate entities."
       }
-    },
-    "error": {
-      "already_configured": "This device is already configured"
     },
     "abort": {
-      "already_configured": "This device is already configured"
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Tasmota MiElHVAC Options",
-        "description": "Modify your heat pump settings",
-        "data": {
-          "name": "Device name",
-          "base_topic": "Base MQTT topic",
-          "model": "Model (MiElHVAC)"
-        }
-      }
+      "single_instance_allowed": "Only one instance is allowed. HVAC devices will be discovered automatically."
     }
   }
 }
