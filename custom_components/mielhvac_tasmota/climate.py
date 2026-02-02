@@ -100,48 +100,55 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         self._topic_cmd_swing_h = f"cmnd/{self._base_topic}/HVACSetSwingH"
         self._topic_cmd_fan = f"cmnd/{self._base_topic}/HVACSetFanSpeed"
         
-        # Entity configuration
-        self._attr_unique_id = f"{self._device_id}_climate"
-        self._attr_has_entity_name = False
-        self._attr_name = f"{self._device_id.replace('tasmota_', '').upper()} Climate"
-        
-        # Find existing Tasmota device and use its identifiers
+        # Find existing Tasmota device first to get proper name
         device_registry = dr.async_get(hass)
         existing_device = None
-        device_name = None
         
         # Search for device with matching topic
         for device in device_registry.devices.values():
             for identifier in device.identifiers:
                 if identifier[0] == "tasmota" and identifier[1] == self._device_id:
                     existing_device = device
-                    device_name = device.name or device.name_by_user or self._device_id
                     break
             if existing_device:
                 break
         
+        # Determine entity name and device info
         if existing_device:
+            # Use device's actual name
+            device_name = (
+                existing_device.name_by_user 
+                or existing_device.name 
+                or self._device_id
+            )
+            _LOGGER.info(
+                "Attaching climate to existing device: %s (ID: %s)", 
+                device_name, 
+                self._device_id
+            )
+            
             # Attach to existing Tasmota device using exact same identifiers
-            _LOGGER.info("Attaching climate to existing device: %s", device_name)
             self._attr_device_info = {
                 "identifiers": existing_device.identifiers,
             }
         else:
-            # Device not found - create standalone or log warning
+            # Device not found - create standalone
+            device_name = self._device_id.replace("tasmota_", "").upper()
             _LOGGER.warning(
                 "Tasmota device %s not found in registry, creating standalone climate entity",
                 self._device_id
             )
-            device_name = self._device_id
+            
             # Fallback: create minimal device info
             self._attr_device_info = {
                 "identifiers": {("tasmota", self._device_id)},
-                "name": f"HVAC {self._device_id}",
+                "name": f"HVAC {device_name}",
                 "manufacturer": "Tasmota",
                 "model": "MiElHVAC",
             }
         
-        # Set entity name based on device name
+        # Entity configuration - set AFTER getting device name
+        self._attr_unique_id = f"{self._device_id}_climate"
         self._attr_name = f"{device_name} Climate"
         self._attr_has_entity_name = False
         
