@@ -104,14 +104,55 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         device_registry = dr.async_get(hass)
         existing_device = None
         
+        _LOGGER.info("=" * 60)
+        _LOGGER.info("Searching for Tasmota device with topic ID: %s", self._device_id)
+        
+        # Log all Tasmota devices for debugging
+        tasmota_devices_found = []
+        for device in device_registry.devices.values():
+            for identifier in device.identifiers:
+                if identifier[0] == "tasmota":
+                    tasmota_devices_found.append({
+                        "id": identifier[1],
+                        "name": device.name,
+                        "name_by_user": device.name_by_user,
+                        "all_identifiers": list(device.identifiers)
+                    })
+        
+        _LOGGER.info("Found %d Tasmota devices in registry:", len(tasmota_devices_found))
+        for dev in tasmota_devices_found:
+            _LOGGER.info("  - ID: %s, Name: %s, User Name: %s", 
+                        dev["id"], dev["name"], dev["name_by_user"])
+            _LOGGER.info("    Identifiers: %s", dev["all_identifiers"])
+        
+        # Try multiple identifier variations
+        search_ids = [
+            self._device_id,  # tasmota_wPac1
+            self._device_id.replace("tasmota_", ""),  # wPac1
+            self._device_id.upper(),  # TASMOTA_WPAC1
+            self._device_id.replace("tasmota_", "").upper(),  # WPAC1
+        ]
+        
+        _LOGGER.info("Trying to match with IDs: %s", search_ids)
+        
         # Search for device with matching topic
         for device in device_registry.devices.values():
             for identifier in device.identifiers:
-                if identifier[0] == "tasmota" and identifier[1] == self._device_id:
+                if identifier[0] == "tasmota" and identifier[1] in search_ids:
                     existing_device = device
+                    _LOGGER.info(
+                        "✓ MATCH FOUND! Device: %s (identifier: %s)", 
+                        device.name or device.name_by_user,
+                        identifier[1]
+                    )
                     break
             if existing_device:
                 break
+        
+        if not existing_device:
+            _LOGGER.warning("✗ NO MATCH - Device not found in registry")
+        
+        _LOGGER.info("=" * 60)
         
         # Determine entity name and device info
         if existing_device:
@@ -121,36 +162,38 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                 or existing_device.name 
                 or self._device_id
             )
-            _LOGGER.info(
-                "Attaching climate to existing device: %s (ID: %s)", 
-                device_name, 
-                self._device_id
-            )
             
             # Attach to existing Tasmota device using exact same identifiers
             self._attr_device_info = {
                 "identifiers": existing_device.identifiers,
             }
         else:
-            # Device not found - create standalone
-            device_name = self._device_id.replace("tasmota_", "").upper()
+            # Device not found - create standalone with a proper name
+            # Extract readable name from topic ID
+            # tasmota_wPac1 -> wPac1 -> WPAC1
+            clean_name = self._device_id.replace("tasmota_", "")
+            device_name = clean_name
+            
             _LOGGER.warning(
-                "Tasmota device %s not found in registry, creating standalone climate entity",
-                self._device_id
+                "Creating standalone climate entity for %s with name '%s'",
+                self._device_id,
+                device_name
             )
             
             # Fallback: create minimal device info
             self._attr_device_info = {
                 "identifiers": {("tasmota", self._device_id)},
-                "name": f"HVAC {device_name}",
+                "name": f"{clean_name}",  # Don't add "HVAC" prefix to device name
                 "manufacturer": "Tasmota",
                 "model": "MiElHVAC",
             }
         
-        # Entity configuration - set AFTER getting device name
+        # Entity configuration - CRITICAL: set name before entity is registered
         self._attr_unique_id = f"{self._device_id}_climate"
         self._attr_name = f"{device_name} Climate"
         self._attr_has_entity_name = False
+        
+        _LOGGER.info("Entity will be named: '%s'", self._attr_name)
         
         # Temperature configuration
         self._attr_temperature_unit = UnitOfTemperature.CELSIUS
