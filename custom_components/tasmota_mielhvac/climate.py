@@ -99,20 +99,91 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         self._topic_cmd_swing_h = f"cmnd/{self._base_topic}/HVACSetSwingH"
         self._topic_cmd_fan = f"cmnd/{self._base_topic}/HVACSetFanSpeed"
         
-        # Entity configuration
+        # Try to find existing Tasmota device
+        from homeassistant.helpers import device_registry as dr, entity_registry as er
+        
+        device_registry = dr.async_get(hass)
+        entity_registry = er.async_get(hass)
+        
+        existing_device = None
+        device_name = None
+        
+        _LOGGER.info("=" * 60)
+        _LOGGER.info("Looking for Tasmota device: %s", device_id)
+        
+        # Search for Tasmota entities that might belong to this device
+        # The entity_id often contains the topic in some form
+        topic_variations = [
+            device_id.lower(),  # tasmota_wpac1
+            device_id.replace("tasmota_", "").lower(),  # wpac1
+            device_id.replace("_", " ").lower(),  # tasmota wpac1
+            device_id.replace("tasmota_", "").replace("_", " ").lower(),  # wpac1
+        ]
+        
+        _LOGGER.info("Searching for Tasmota entities with patterns: %s", topic_variations)
+        
+        # Find Tasmota platform entities
+        candidate_devices = {}
+        for entity in entity_registry.entities.values():
+            # Only check Tasmota entities
+            if entity.platform != "tasmota":
+                continue
+            
+            entity_id_lower = entity.entity_id.lower()
+            
+            # Check if entity matches our topic
+            for variation in topic_variations:
+                if variation in entity_id_lower:
+                    if entity.device_id:
+                        if entity.device_id not in candidate_devices:
+                            candidate_devices[entity.device_id] = []
+                        candidate_devices[entity.device_id].append(entity.entity_id)
+                    break
+        
+        _LOGGER.info("Found %d candidate Tasmota devices", len(candidate_devices))
+        
+        # Select device with most matching entities
+        if candidate_devices:
+            best_device_id = max(candidate_devices, key=lambda x: len(candidate_devices[x]))
+            existing_device = device_registry.devices.get(best_device_id)
+            
+            if existing_device:
+                device_name = existing_device.name_by_user or existing_device.name
+                _LOGGER.info("✓ Found Tasmota device: %s", device_name)
+                _LOGGER.info("  Matching entities (%d): %s", 
+                           len(candidate_devices[best_device_id]),
+                           candidate_devices[best_device_id][:3])
+                _LOGGER.info("  Device identifiers: %s", list(existing_device.identifiers))
+        
+        if not existing_device:
+            _LOGGER.info("✗ No existing Tasmota device found, creating standalone")
+        
+        _LOGGER.info("=" * 60)
+        
+        # Configure entity
+        if existing_device:
+            # Attach to existing Tasmota device
+            self._attr_device_info = {
+                "identifiers": existing_device.identifiers,
+            }
+            self._attr_name = "Climate"
+            self._attr_has_entity_name = True
+            
+            _LOGGER.info("Attaching to device '%s' as 'Climate'", device_name)
+        else:
+            # Create standalone device
+            self._attr_device_info = {
+                "identifiers": {(DOMAIN, self._device_id)},
+                "name": f"{self._device_id} MiElHVAC",
+                "manufacturer": "Mitsubishi Electric",
+                "model": "Heat Pump (MiElHVAC)",
+            }
+            self._attr_name = f"{self._device_id} Climate"
+            self._attr_has_entity_name = False
+            
+            _LOGGER.info("Creating standalone device")
+        
         self._attr_unique_id = f"{self._device_id}_mielhvac_climate"
-        self._attr_name = f"{self._device_id} Climate"
-        self._attr_has_entity_name = False
-        
-        # Create standalone device
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, self._device_id)},
-            "name": f"{self._device_id} MiElHVAC",
-            "manufacturer": "Mitsubishi Electric",
-            "model": "Heat Pump (MiElHVAC)",
-        }
-        
-        _LOGGER.info("Climate entity '%s' will be created", self._attr_name)
         
         # Temperature configuration
         self._attr_temperature_unit = UnitOfTemperature.CELSIUS
