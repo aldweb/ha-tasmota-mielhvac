@@ -107,45 +107,67 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         _LOGGER.info("=" * 60)
         _LOGGER.info("Searching for Tasmota device with topic ID: %s", self._device_id)
         
-        # Log all Tasmota devices for debugging
+        # Log ALL Tasmota devices for debugging (check all domains)
         tasmota_devices_found = []
         for device in device_registry.devices.values():
+            # Check all identifiers, not just "tasmota" domain
+            has_tasmota = False
             for identifier in device.identifiers:
-                if identifier[0] == "tasmota":
-                    tasmota_devices_found.append({
-                        "id": identifier[1],
-                        "name": device.name,
-                        "name_by_user": device.name_by_user,
-                        "all_identifiers": list(device.identifiers)
-                    })
+                if "tasmota" in str(identifier).lower():
+                    has_tasmota = True
+                    break
+            
+            if has_tasmota or (device.name and "tasmota" in device.name.lower()):
+                tasmota_devices_found.append({
+                    "name": device.name,
+                    "name_by_user": device.name_by_user,
+                    "all_identifiers": list(device.identifiers),
+                    "config_entries": list(device.config_entries)
+                })
         
-        _LOGGER.info("Found %d Tasmota devices in registry:", len(tasmota_devices_found))
+        _LOGGER.info("Found %d Tasmota-related devices:", len(tasmota_devices_found))
         for dev in tasmota_devices_found:
-            _LOGGER.info("  - ID: %s, Name: %s, User Name: %s", 
-                        dev["id"], dev["name"], dev["name_by_user"])
+            _LOGGER.info("  Device: %s", dev["name"])
+            _LOGGER.info("    User Name: %s", dev["name_by_user"])
             _LOGGER.info("    Identifiers: %s", dev["all_identifiers"])
+            _LOGGER.info("    Config Entries: %s", dev["config_entries"])
         
-        # Try multiple identifier variations
-        search_ids = [
+        # Try to find device by checking if topic appears in device name or identifiers
+        search_patterns = [
             self._device_id,  # tasmota_wPac1
             self._device_id.replace("tasmota_", ""),  # wPac1
-            self._device_id.upper(),  # TASMOTA_WPAC1
-            self._device_id.replace("tasmota_", "").upper(),  # WPAC1
+            self._device_id.replace("_", " "),  # tasmota wPac1
+            self._device_id.replace("tasmota_", "").replace("_", " "),  # wPac 1
         ]
         
-        _LOGGER.info("Trying to match with IDs: %s", search_ids)
+        _LOGGER.info("Trying to match with patterns: %s", search_patterns)
         
-        # Search for device with matching topic
+        # Search in multiple ways
         for device in device_registry.devices.values():
+            # Method 1: Check identifier domain and value
             for identifier in device.identifiers:
-                if identifier[0] == "tasmota" and identifier[1] in search_ids:
-                    existing_device = device
-                    _LOGGER.info(
-                        "✓ MATCH FOUND! Device: %s (identifier: %s)", 
-                        device.name or device.name_by_user,
-                        identifier[1]
-                    )
+                if identifier[0] == "tasmota":
+                    for pattern in search_patterns:
+                        if pattern.lower() in identifier[1].lower():
+                            existing_device = device
+                            _LOGGER.info("✓ MATCH by identifier! Pattern: %s, Device: %s", pattern, device.name)
+                            break
+                if existing_device:
                     break
+            
+            # Method 2: Check device name
+            if not existing_device and device.name:
+                for pattern in search_patterns:
+                    if pattern.lower() in device.name.lower():
+                        # Verify it's actually a Tasmota device
+                        for identifier in device.identifiers:
+                            if identifier[0] == "tasmota":
+                                existing_device = device
+                                _LOGGER.info("✓ MATCH by name! Pattern: %s, Device: %s", pattern, device.name)
+                                break
+                        if existing_device:
+                            break
+            
             if existing_device:
                 break
         
@@ -391,4 +413,3 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
             )
             self._attr_swing_mode = swing_mode
             self.async_write_ha_state()
-            
