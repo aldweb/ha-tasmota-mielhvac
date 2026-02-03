@@ -110,7 +110,6 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
             "name": f"{self._device_id} MiElHVAC",
             "manufacturer": "Mitsubishi Electric",
             "model": "Heat Pump (MiElHVAC)",
-            "via_device": (DOMAIN, "mqtt"),
         }
         
         _LOGGER.info("Climate entity '%s' will be created", self._attr_name)
