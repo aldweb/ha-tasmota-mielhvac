@@ -2,12 +2,20 @@
   "config": {
     "step": {
       "user": {
-        "title": "Activer la découverte automatique Tasmota MiElHVAC",
-        "description": "Cela découvrira automatiquement les appareils HVAC publiant sur tele/+/SENSOR et créera des entités climatisation."
+        "title": "Configuration de Tasmota MiElHVAC",
+        "description": "Cette intégration découvrira automatiquement les climatiseurs Mitsubishi Electric contrôlés par le pilote MiElHVAC de Tasmota.\n\nLes appareils publiant des données MiElHVAC sur `tele/+/SENSOR` seront détectés et liés à leurs appareils Tasmota."
       }
     },
     "abort": {
-      "single_instance_allowed": "Une seule instance est autorisée. Les appareils HVAC seront découverts automatiquement."
+      "single_instance_allowed": "Une seule instance est autorisée. Les climatiseurs seront découverts automatiquement."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options Tasmota MiElHVAC",
+        "description": "Configurez les options avancées de l'intégration."
+      }
     }
   }
 }
