@@ -1,21 +1,20 @@
-"""
-Constants for the Tasmota MiElHVAC integration.
-"""
-from homeassistant.components.climate import HVACMode, HVACAction
+"""Constants for the Tasmota MiElHVAC integration."""
+from homeassistant.components.climate import HVACAction, HVACMode
 
+# Integration domain
 DOMAIN = "tasmota_mielhvac"
 
-# Default values
+# Default model identifier in MQTT messages
 DEFAULT_MODEL = "MiElHVAC"
 
-# Temperature parameters
+# Temperature range and precision
 MIN_TEMP = 10
 MAX_TEMP = 31
 TEMP_STEP = 1.0
 PRECISION = 0.5
 
-# HVAC mode mapping
-HVAC_MODE_MAP = {
+# HVAC mode mapping: Tasmota → Home Assistant
+HVAC_MODE_MAP: dict[str, HVACMode] = {
     "off": HVACMode.OFF,
     "auto": HVACMode.AUTO,
     "cool": HVACMode.COOL,
@@ -24,10 +23,13 @@ HVAC_MODE_MAP = {
     "fan_only": HVACMode.FAN_ONLY,
 }
 
-HVAC_MODE_REVERSE_MAP = {v: k for k, v in HVAC_MODE_MAP.items()}
+# Reverse mapping: Home Assistant → Tasmota
+HVAC_MODE_REVERSE_MAP: dict[HVACMode, str] = {
+    v: k for k, v in HVAC_MODE_MAP.items()
+}
 
-# Action mapping
-ACTION_MAP = {
+# HVAC action mapping: Tasmota mode → Home Assistant action
+ACTION_MAP: dict[str, HVACAction] = {
     "off": HVACAction.OFF,
     "heat": HVACAction.HEATING,
     "cool": HVACAction.COOLING,
@@ -36,7 +38,27 @@ ACTION_MAP = {
     "auto": HVACAction.IDLE,
 }
 
-# Available modes
-FAN_MODES = ["auto", "quiet", "1", "2", "3", "4"]
-SWING_V_MODES = ["auto", "up", "up_middle", "center", "down_middle", "down", "swing"]
-SWING_H_MODES = ["auto", "left", "left_middle", "center", "right_middle", "right", "swing"]
+# Available fan speed modes
+FAN_MODES: list[str] = ["auto", "quiet", "1", "2", "3", "4"]
+
+# Available swing modes (vertical)
+SWING_V_MODES: list[str] = [
+    "auto",
+    "up",
+    "up_middle",
+    "center",
+    "down_middle",
+    "down",
+    "swing",
+]
+
+# Available swing modes (horizontal)
+SWING_H_MODES: list[str] = [
+    "auto",
+    "left",
+    "left_middle",
+    "center",
+    "right_middle",
+    "right",
+    "swing",
+]
