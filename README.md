@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/github/license/aldweb/ha-tasmota-mielhvac.svg)](LICENSE)
 
 <img src="images/mitsubishi_heat_pump.png" align="left" width="300" style="margin-right: 20px; margin-bottom: 20px;">
-Home Assistant integration for **Mitsubishi Electric heat pumps** controlled by Tasmota's MiElHVAC driver.
+Home Assistant integration for Mitsubishi Electric heat pumps controlled by Tasmota's MiElHVAC driver.
 
 This integration automatically discovers and creates climate entities for your HVAC devices, seamlessly linking them to your existing Tasmota devices.
 <br clear="all" />
