@@ -124,22 +124,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         try:
             temperature = float(temp_raw)
-    except (TypeError, ValueError):
-        temperature = None
+        except (TypeError, ValueError):
+            temperature = None
 
-    if temperature is not None:
-        _LOGGER.info(
-            "Discovered MiElHVAC device: %s (Temperature: %.1f°C)%s",
-            device_id,
-            temperature,
-            f" - {device_name}" if device_name else "",
-        )
-    else:
-        _LOGGER.info(
-            "Discovered MiElHVAC device: %s (Temperature: unknown)%s",
-            device_id,
-            f" - {device_name}" if device_name else "",
-        )
+        if temperature is not None:
+            _LOGGER.info(
+                "Discovered MiElHVAC device: %s (Temperature: %.1f°C)%s",
+                device_id,
+                temperature,
+                f" - {device_name}" if device_name else "",
+            )
+        else:
+            _LOGGER.info(
+                "Discovered MiElHVAC device: %s (Temperature: unknown)%s",
+                device_id,
+                f" - {device_name}" if device_name else "",
+            )
 
         # Mark as discovered
         discovered[device_id] = {
