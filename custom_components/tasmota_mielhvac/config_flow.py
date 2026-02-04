@@ -1,8 +1,8 @@
-"""
-Config flow for Tasmota MiElHVAC integration.
-Simple one-time setup to enable auto-discovery.
-"""
+"""Config flow for Tasmota MiElHVAC integration."""
 from __future__ import annotations
+
+from typing import Any
+
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 
@@ -15,14 +15,13 @@ class MiElHVACTasmotaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(
-        self, user_input: dict[str, any] | None = None
+        self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle user initiated flow."""
-        
-        # Only allow one instance
+        """Handle the initial step."""
+        # Only allow single instance
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
-        
+
         if user_input is not None:
             return self.async_create_entry(
                 title="Tasmota MiElHVAC",
