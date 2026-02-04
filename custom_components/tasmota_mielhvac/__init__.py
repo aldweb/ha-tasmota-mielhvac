@@ -57,33 +57,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             tasmota_devices = hass.data[DOMAIN][entry.entry_id]["tasmota_devices"]
             tasmota_devices[topic] = {
                 "mac": mac,
-                "device_name": payload.get("dn"),
+                "device_name": payload.get("dn"),  # Device name from Tasmota
                 "model": payload.get("md"),
                 "ip": payload.get("ip"),
             }
             
             _LOGGER.debug(
-                "Stored Tasmota device info: %s (MAC: %s)",
+                "Stored Tasmota device info: %s (MAC: %s, Name: %s)",
                 topic,
-                mac
+                mac,
+                payload.get("dn")
             )
             
             # If we already discovered this device as MiElHVAC, signal with MAC
             discovered = hass.data[DOMAIN][entry.entry_id]["discovered_devices"]
-            if topic in discovered and not discovered[topic].get("mac"):
-                discovered[topic]["mac"] = mac
-                _LOGGER.info(
-                    "✅ Linked MiElHVAC device %s to MAC %s via Tasmota discovery",
-                    topic,
-                    mac
-                )
-                # Re-signal discovery with MAC now available
-                async_dispatcher_send(
-                    hass,
-                    SIGNAL_HVAC_DISCOVERED,
-                    topic,
-                    mac,
-                )
+            if topic in discovered:
+                if not discovered[topic].get("mac"):
+                    discovered[topic]["mac"] = mac
+                    discovered[topic]["device_name"] = payload.get("dn")
+                    _LOGGER.info(
+                        "✅ Linked MiElHVAC device %s to MAC %s and name '%s' via Tasmota discovery",
+                        topic,
+                        mac,
+                        payload.get("dn")
+                    )
+                    # Re-signal discovery with MAC and name now available
+                    async_dispatcher_send(
+                        hass,
+                        SIGNAL_HVAC_DISCOVERED,
+                        topic,
+                        mac,
+                        payload.get("dn"),
+                    )
             
         except Exception as err:
             _LOGGER.error("Error processing Tasmota discovery: %s", err)
@@ -124,13 +129,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             
             # Get MAC from Tasmota discovery if available
             tasmota_devices = hass.data[DOMAIN][entry.entry_id]["tasmota_devices"]
-            mac = tasmota_devices.get(device_id, {}).get("mac")
+            tasmota_info = tasmota_devices.get(device_id, {})
+            mac = tasmota_info.get("mac")
+            device_name = tasmota_info.get("device_name")
             
             _LOGGER.info(
-                "🎯 Discovered MiElHVAC device: %s (Temperature: %s°C)%s",
+                "🎯 Discovered MiElHVAC device: %s (Temperature: %s°C)%s%s",
                 device_id,
                 mielhvac_data.get("Temperature"),
-                f" with MAC {mac}" if mac else ""
+                f" with MAC {mac}" if mac else "",
+                f" named '{device_name}'" if device_name else ""
             )
             
             # Mark as discovered
@@ -138,6 +146,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "device_id": device_id,
                 "base_topic": device_id,
                 "mac": mac,  # May be None if Tasmota discovery not received yet
+                "device_name": device_name,  # May be None
             }
             
             # Signal discovery to climate platform
@@ -146,6 +155,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 SIGNAL_HVAC_DISCOVERED,
                 device_id,
                 mac,  # Pass MAC (may be None)
+                device_name,  # Pass device name (may be None)
             )
             
         except Exception as err:
