@@ -144,6 +144,7 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         self._attr_swing_mode = "auto"
         self._swing_h_mode = "auto"
         self._available = False
+        self._last_on_mode = HVACMode.AUTO  # Remember last non-OFF mode for turn_on
 
         # Supported features
         self._attr_hvac_modes = list(HVAC_MODE_MAP.values())
@@ -153,6 +154,8 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
             ClimateEntityFeature.TARGET_TEMPERATURE
             | ClimateEntityFeature.FAN_MODE
             | ClimateEntityFeature.SWING_MODE
+            | ClimateEntityFeature.TURN_ON
+            | ClimateEntityFeature.TURN_OFF
         )
 
         # MQTT subscription state
@@ -204,7 +207,12 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         # Restore previous state
         if last_state := await self.async_get_last_state():
             if last_state.state in HVAC_MODE_MAP.values():
-                self._attr_hvac_mode = HVACMode(last_state.state)
+                restored_mode = HVACMode(last_state.state)
+                self._attr_hvac_mode = restored_mode
+                
+                # Remember last non-OFF mode
+                if restored_mode != HVACMode.OFF:
+                    self._last_on_mode = restored_mode
 
             if temp := last_state.attributes.get(ATTR_TEMPERATURE):
                 self._attr_target_temperature = float(temp)
@@ -253,7 +261,13 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
 
                 if "HAMode" in data:
                     ha_mode = data["HAMode"]
-                    self._attr_hvac_mode = HVAC_MODE_MAP.get(ha_mode, HVACMode.OFF)
+                    new_mode = HVAC_MODE_MAP.get(ha_mode, HVACMode.OFF)
+                    
+                    # Remember last non-OFF mode for turn_on
+                    if new_mode != HVACMode.OFF:
+                        self._last_on_mode = new_mode
+                    
+                    self._attr_hvac_mode = new_mode
                     self._attr_hvac_action = ACTION_MAP.get(ha_mode, HVACAction.OFF)
                     updated = True
 
@@ -369,6 +383,11 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                 qos=1,
                 retain=False,
             )
+            
+            # Remember last non-OFF mode for turn_on
+            if hvac_mode != HVACMode.OFF:
+                self._last_on_mode = hvac_mode
+            
             self._attr_hvac_mode = hvac_mode
             self.async_write_ha_state()
 
@@ -397,3 +416,12 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
             )
             self._attr_swing_mode = swing_mode
             self.async_write_ha_state()
+
+    async def async_turn_on(self) -> None:
+        """Turn the HVAC device on (restore last mode or default to auto)."""
+        # Use last known non-OFF mode
+        await self.async_set_hvac_mode(self._last_on_mode)
+
+    async def async_turn_off(self) -> None:
+        """Turn the HVAC device off."""
+        await self.async_set_hvac_mode(HVACMode.OFF)
