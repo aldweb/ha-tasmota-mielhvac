@@ -7,7 +7,6 @@ Tasmota devices via MAC address.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import Any
@@ -45,9 +44,6 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 SIGNAL_HVAC_DISCOVERED = f"{DOMAIN}_hvac_discovered"
-
-# Delay before publishing MQTT discovery to ensure entity registration
-DISCOVERY_PUBLISH_DELAY = 2
 
 
 async def async_setup_entry(
@@ -122,7 +118,7 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
 
         # Entity attributes
         self._attr_unique_id = f"{self._device_id}_mielhvac_climate"
-        self._attr_name = f"{self._device_id} MiElHVAC"
+        self._attr_name = "HVAC"
         self._attr_has_entity_name = True
 
         # Device info (linked to Tasmota device via MAC)
@@ -162,19 +158,12 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         # MQTT subscription state
         self._sub_state = None
 
-        # Schedule MAC retrieval or discovery publication
+        # Request device info if MAC not provided (fallback)
         if not self._mac_address:
             hass.async_create_task(self._request_device_info())
-        else:
-            hass.async_create_task(self._publish_mqtt_discovery_delayed())
-
-    async def _publish_mqtt_discovery_delayed(self) -> None:
-        """Publish MQTT discovery after delay to ensure entity registration."""
-        await asyncio.sleep(DISCOVERY_PUBLISH_DELAY)
-        self._publish_mqtt_discovery()
 
     def _set_mac_address(self, mac: str) -> None:
-        """Update MAC address and republish discovery."""
+        """Update MAC address and device info."""
         if self._mac_address == mac:
             return
 
@@ -184,19 +173,15 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         }
 
         _LOGGER.info("Updated MAC address for %s: %s", self._device_id, mac)
-        self._publish_mqtt_discovery()
         self.async_write_ha_state()
 
     def _set_device_name(self, device_name: str) -> None:
-        """Update device name and republish discovery."""
+        """Update device name."""
         if self._device_name == device_name:
             return
 
         self._device_name = device_name
         _LOGGER.info("Updated device name for %s: %s", self._device_id, device_name)
-
-        if self._mac_address:
-            self._publish_mqtt_discovery()
         self.async_write_ha_state()
 
     async def _request_device_info(self) -> None:
@@ -213,65 +198,6 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
             _LOGGER.warning(
                 "Failed to request device info for %s: %s", self._device_id, err
             )
-
-    def _publish_mqtt_discovery(self) -> None:
-        """Publish MQTT discovery to link climate entity to Tasmota device."""
-        if not self._mac_address:
-            _LOGGER.warning(
-                "Cannot publish discovery without MAC address for %s", self._device_id
-            )
-            return
-
-        mac_clean = self._mac_address.replace(":", "").upper()
-        device_display_name = self._device_name or self._device_id
-        discovery_topic = f"homeassistant/climate/{mac_clean}_mielhvac/config"
-
-        config = {
-            "name": "HVAC",
-            "unique_id": f"{mac_clean}_mielhvac_climate",
-            "device": {
-                "connections": [["mac", mac_clean]],
-                "name": device_display_name,
-                "manufacturer": "Tasmota",
-                "model": "MiElHVAC",
-            },
-            "availability_topic": self._topic_avail,
-            "payload_available": "Online",
-            "payload_not_available": "Offline",
-            "temperature_command_topic": self._topic_cmd_temp,
-            "temperature_state_topic": self._topic_state,
-            "temperature_state_template": "{{ value_json.Temp }}",
-            "current_temperature_topic": self._topic_sensor,
-            "current_temperature_template": f"{{{{ value_json.{self._model}.Temperature }}}}",
-            "min_temp": MIN_TEMP,
-            "max_temp": MAX_TEMP,
-            "temp_step": TEMP_STEP,
-            "precision": PRECISION,
-            "mode_command_topic": self._topic_cmd_mode,
-            "mode_state_topic": self._topic_state,
-            "mode_state_template": "{% set modes = {'off': 'off', 'auto': 'auto', 'cool': 'cool', 'dry': 'dry', 'heat': 'heat', 'fan_only': 'fan_only'} %}{{ modes[value_json.HAMode] if value_json.HAMode in modes else 'off' }}",
-            "modes": ["off", "auto", "cool", "dry", "heat", "fan_only"],
-            "fan_mode_command_topic": self._topic_cmd_fan,
-            "fan_mode_state_topic": self._topic_state,
-            "fan_mode_state_template": "{{ value_json.FanSpeed }}",
-            "fan_modes": FAN_MODES,
-            "swing_mode_command_topic": self._topic_cmd_swing_v,
-            "swing_mode_state_topic": self._topic_state,
-            "swing_mode_state_template": "{{ value_json.SwingV }}",
-            "swing_modes": SWING_V_MODES,
-        }
-
-        self.hass.async_create_task(
-            mqtt.async_publish(
-                self.hass,
-                discovery_topic,
-                json.dumps(config),
-                qos=1,
-                retain=True,
-            )
-        )
-
-        _LOGGER.info("Published MQTT discovery for %s", self._device_id)
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to MQTT topics and restore previous state."""
@@ -369,7 +295,6 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                         mac,
                     )
 
-                    self._publish_mqtt_discovery()
                     self.async_write_ha_state()
             except (json.JSONDecodeError, ValueError, KeyError):
                 pass  # Silently ignore malformed status data
@@ -405,23 +330,11 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         await subscription.async_subscribe_topics(self.hass, self._sub_state)
 
     async def async_will_remove_from_hass(self) -> None:
-        """Clean up MQTT subscriptions and discovery message."""
+        """Clean up MQTT subscriptions."""
         # Unsubscribe from MQTT
         self._sub_state = subscription.async_unsubscribe_topics(
             self.hass, self._sub_state
         )
-
-        # Remove MQTT discovery message
-        if self._mac_address:
-            mac_clean = self._mac_address.replace(":", "").upper()
-            discovery_topic = f"homeassistant/climate/{mac_clean}_mielhvac/config"
-            await mqtt.async_publish(
-                self.hass,
-                discovery_topic,
-                "",
-                qos=1,
-                retain=True,
-            )
 
     @property
     def available(self) -> bool:
