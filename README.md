@@ -2,7 +2,7 @@
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-green.svg?logo=homeassistantcommunitystore)](https://hacs.xyz/docs/publishing/include)
 [![Latest Version](https://img.shields.io/github/v/release/aldweb/ha-tasmota-mielhvac?logo=github&color=blue)](https://github.com/aldweb/ha-tasmota-mielhvac/releases)
-[![Language](https://img.shields.io/badge/Language-Berry-blueviolet?logo=berry)](https://github.com/aldweb/ha-tasmota-mielhvac)
+[![Language](https://img.shields.io/badge/Language-Python-blue?logo=python)](https://github.com/aldweb/ha-tasmota-mielhvac)
 [![License](https://img.shields.io/github/license/aldweb/ha-tasmota-mielhvac?logo=mit&color=yellow)](https://github.com/aldweb/ha-tasmota-mielhvac/blob/main/LICENSE)
 
 
