@@ -1,13 +1,8 @@
 # Tasmota MiElHVAC Integration for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/aldweb/ha-tasmota-mielhvac.svg)](https://github.com/aldweb/ha-tasmota-mielhvac/releases)
-[![License](https://img.shields.io/github/license/aldweb/ha-tasmota-mielhvac.svg)](LICENSE)
-
-[![GitHub all releases](https://img.shields.io/github/downloads/aldweb/ha-tasmota-mielhvac/total?logo=github&color=blue)](https://github.com/aldweb/ha-tasmota-mielhvac/releases)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-green.svg?logo=homeassistantcommunitystore)](https://hacs.xyz/docs/publishing/include)
 [![Latest Version](https://img.shields.io/github/v/release/aldweb/ha-tasmota-mielhvac?logo=github&color=blue)](https://github.com/aldweb/ha-tasmota-mielhvac/releases)
 [![Language](https://img.shields.io/badge/Language-Berry-blueviolet?logo=berry)](https://github.com/aldweb/ha-tasmota-mielhvac)
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg?logo=homeassistantcommunitystore)](https://hacs.xyz/docs/publishing/include)
 [![License](https://img.shields.io/github/license/aldweb/ha-tasmota-mielhvac?logo=mit&color=yellow)](https://github.com/aldweb/ha-tasmota-mielhvac/blob/main/LICENSE)
 
 
