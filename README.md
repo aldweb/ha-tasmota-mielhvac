@@ -2,9 +2,8 @@
 
 [![Works with Home Assistant](https://img.shields.io/badge/Works%20with-Home%20Assistant-41BDF5?logo=homeassistant&logoColor=white)](https://www.home-assistant.io/)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?logo=homeassistantcommunitystore&logoColor=white)](https://github.com/hacs/integration)
-[![Latest Version](https://img.shields.io/github/v/release/aldweb/ha-tasmota-mielhvac?logo=github&color=blue)](https://github.com/aldweb/ha-tasmota-mielhvac/releases)
-[![License](https://img.shields.io/github/license/aldweb/ha-tasmota-mielhvac?logo=mit&color=yellow)](https://github.com/aldweb/ha-tasmota-mielhvac/blob/main/LICENSE)
-
+[![Latest Version](https://img.shields.io/github/v/tag/aldweb/ha-tasmota-mielhvac?label=Latest%20Version&logo=github&color=blue)](https://github.com/aldweb/ha-tasmota-mielhvac/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <img src="https://raw.githubusercontent.com/aldweb/ha-tasmota-mielhvac/master/images/mitsubishi_heat_pump.png" align="left" width="300" style="margin-right: 20px; margin-bottom: 20px;">
 Home Assistant integration for Mitsubishi Electric heat pumps controlled by Tasmota's MiElHVAC driver.
