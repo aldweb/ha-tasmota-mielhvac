@@ -1,5 +1,6 @@
 # Tasmota MiElHVAC Integration for Home Assistant
 
+[![Works with Home Assistant](https://img.shields.io/badge/Works%20with-Home%20Assistant-41BDF5?logo=homeassistant&logoColor=white)](https://www.home-assistant.io/)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-green.svg?logo=homeassistantcommunitystore)](https://hacs.xyz/docs/publishing/include)
 [![Latest Version](https://img.shields.io/github/v/release/aldweb/ha-tasmota-mielhvac?logo=github&color=blue)](https://github.com/aldweb/ha-tasmota-mielhvac/releases)
 [![Language](https://img.shields.io/badge/Language-Python-blue?logo=python)](https://github.com/aldweb/ha-tasmota-mielhvac)
