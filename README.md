@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-green.svg?logo=homeassistantcommunitystore)](https://hacs.xyz/docs/publishing/include)
 [![Latest Version](https://img.shields.io/github/v/release/aldweb/ha-tasmota-mielhvac?logo=github&color=blue)](https://github.com/aldweb/ha-tasmota-mielhvac/releases)
 [![Language](https://img.shields.io/badge/Language-Python-blue?logo=python)](https://github.com/aldweb/ha-tasmota-mielhvac)
-[![License](https://img.shields.io/github/license/aldweb/ha-tasmota-mielhvac?logo=mit&color=orange)](https://github.com/aldweb/ha-tasmota-mielhvac/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/aldweb/ha-tasmota-mielhvac?logo=mit&color=yellow)](https://github.com/aldweb/ha-tasmota-mielhvac/blob/main/LICENSE)
 
 
 <img src="https://raw.githubusercontent.com/aldweb/ha-tasmota-mielhvac/master/images/mitsubishi_heat_pump.png" align="left" width="300" style="margin-right: 20px; margin-bottom: 20px;">
