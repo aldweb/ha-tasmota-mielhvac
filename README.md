@@ -21,6 +21,11 @@ This integration automatically discovers and creates climate entities for your H
 - 🏠 **Local Control** - All communication via local MQTT (no cloud required)
 - 🔄 **State Persistence** - Remembers settings after Home Assistant restarts
 - 🌍 **Multi-language** - English and French UI translations included
+- ⚡ **Energy Monitoring** - Real-time power (W) and cumulative energy (kWh)
+- 🌬️ **Extended Controls** - Purifier, Night Mode, EconoCool, i-See Air Direction
+- 🌡️ **Remote Temperature** - Send an external temperature sensor reading to the unit
+- 📊 **Capability Awareness** - Exposes unit capabilities reported by the driver
+- ↔️ **Backward Compatible** - Works with both legacy and new Tasmota MiElHVAC driver
 
 ## Supported Features
 
@@ -35,15 +40,42 @@ This integration automatically discovers and creates climate entities for your H
 ### Fan Speeds
 - Auto
 - Quiet
-- Speed 1-4
+- Speed 1–4
 
 ### Swing Control
 - **Vertical**: Auto, Up, Up-Middle, Center, Down-Middle, Down, Swing
 - **Horizontal**: Auto, Left, Left-Middle, Center, Right-Middle, Right, Swing
 
 ### Temperature Control
-- Range: 10°C - 31°C
+- Range: 10°C – 31°C (may be narrowed by unit capabilities)
 - Precision: 0.5°C steps
+
+### Extended Controls (new driver, post-PR#24660)
+
+These features are exposed as state attributes and callable via Home Assistant services. They are only available when your Tasmota firmware reports the corresponding capability (`cap_run_state=true`):
+
+| Feature | Attribute | Notes |
+|---------|-----------|-------|
+| Purifier | `purifier` | `on` / `off` |
+| Night Mode | `night_mode` | `on` / `off` |
+| EconoCool | `econo_cool` | `on` / `off` — COOL mode only |
+| i-See Air Direction | `air_direction` | `auto`, `swing`, `even`, `direct` |
+| Remote Temperature | `remote_temperature` | Send external temp to unit (°C) |
+
+### Energy Monitoring (new driver, post-PR#24486)
+
+| Attribute | Unit | Description |
+|-----------|------|-------------|
+| `power_usage_w` | W | Instantaneous power consumption |
+| `energy_total_kwh` | kWh | Cumulative energy total |
+
+### Additional Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| `swing_horizontal` | Current horizontal swing position |
+| `outdoor_temperature` | Outdoor temperature reported by unit (if supported) |
+| `capabilities` | Map of `*Supported` flags from the driver |
 
 ## Prerequisites
 
@@ -64,6 +96,17 @@ For complete hardware setup including wiring diagrams and CN105 pinout, see:
 - MQTT broker (e.g., Mosquitto) configured in Home Assistant
 
 **Note:** This Home Assistant integration works with both ESP32 and ESP8266. The [MiElHVAC Display Driver](https://github.com/aldweb/MiElHVAC-tasmota-display-driver) (Berry-based web UI) requires ESP32 only, but is optional.
+
+### Tasmota Driver Compatibility
+
+This integration is compatible with **all versions** of the Tasmota MiElHVAC driver:
+
+| Driver version | SENSOR field | HVACSETTINGS field | Supported |
+|---|---|---|:-:|
+| Pre-PR#24486 (legacy) | `Temperature` | `Temp` | ✅ |
+| Post-PR#24490 | `RoomTemperature` | `SetTemperature` | ✅ |
+| Post-PR#24517 | + `RemoteTemperature` | — | ✅ |
+| Post-PR#24660 | + `OutdoorTemperature`, energy, capabilities | + `Purifier`, `NightMode`, `EconoCool` | ✅ |
 
 ### Tasmota Configuration
 
@@ -131,7 +174,7 @@ Check the logs to confirm your devices were discovered:
 
 Look for messages like:
 ```
-Discovered MiElHVAC device: tasmota_hvac (Temperature: 21.5°C) - Living Room AC
+Discovered MiElHVAC device: tasmota_hvac (RoomTemp: 21.5°C) - Living Room AC
 ```
 
 ### 3. Check Your Devices
@@ -151,16 +194,114 @@ Once discovered, you can control your HVAC through:
 3. **Automations** - Create climate-based automations
 4. **Voice Assistants** - Control via Alexa, Google Assistant, etc.
 
-## MQTT Topics
+### Extended Controls via Services
 
-The integration listens to and publishes on standard Tasmota MQTT topics:
+Features like Purifier, Night Mode, EconoCool, Air Direction, and Remote Temperature are not yet exposed as native HA climate controls, but can be triggered via the `mqtt.publish` service or automations.
+
+#### Set Remote Temperature
+
+Send an external temperature reading to the HVAC unit (replaces the unit's built-in sensor):
+
+```yaml
+service: mqtt.publish
+data:
+  topic: cmnd/your_topic/HVACSetRemoteTemp
+  payload: "21.5"
+```
+
+To clear the remote temperature and revert to the unit's own sensor:
+```yaml
+service: mqtt.publish
+data:
+  topic: cmnd/your_topic/HVACSetRemoteTempClearTime
+  payload: "0"
+```
+
+#### Enable Purifier
+
+```yaml
+service: mqtt.publish
+data:
+  topic: cmnd/your_topic/HVACSetPurify
+  payload: "on"
+```
+
+#### Enable Night Mode
+
+```yaml
+service: mqtt.publish
+data:
+  topic: cmnd/your_topic/HVACSetNightMode
+  payload: "on"
+```
+
+#### Enable EconoCool (COOL mode only)
+
+```yaml
+service: mqtt.publish
+data:
+  topic: cmnd/your_topic/HVACSetEconoCool
+  payload: "on"
+```
+
+#### Set i-See Air Direction
+
+```yaml
+service: mqtt.publish
+data:
+  topic: cmnd/your_topic/HVACSetAirDirection
+  payload: "swing"   # auto | swing | even | direct
+```
+
+#### Set Horizontal Swing
+
+```yaml
+service: mqtt.publish
+data:
+  topic: cmnd/your_topic/HVACSetSwingH
+  payload: "swing"   # auto | left | left_middle | center | right_middle | right | swing
+```
+
+### Automation Examples
+
+#### Sync indoor temperature from another sensor
+
+```yaml
+automation:
+  - alias: "Send remote temperature to HVAC"
+    trigger:
+      - platform: state
+        entity_id: sensor.living_room_temperature
+    action:
+      - service: mqtt.publish
+        data:
+          topic: cmnd/living_room_hvac/HVACSetRemoteTemp
+          payload: "{{ states('sensor.living_room_temperature') }}"
+```
+
+#### Enable Night Mode at bedtime
+
+```yaml
+automation:
+  - alias: "HVAC Night Mode"
+    trigger:
+      - platform: time
+        at: "22:30:00"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: cmnd/bedroom_hvac/HVACSetNightMode
+          payload: "on"
+```
+
+## MQTT Topics
 
 ### Subscribed Topics (Listening)
 
 | Topic | Purpose |
 |-------|---------|
-| `tele/{topic}/SENSOR` | Current temperature and humidity |
-| `tele/{topic}/HVACSETTINGS` | HVAC state (mode, target temp, fan, swing) |
+| `tele/{topic}/SENSOR` | Room temp, outdoor temp, energy, capabilities |
+| `tele/{topic}/HVACSETTINGS` | HVAC state (mode, target temp, fan, swing, run-state features) |
 | `tele/{topic}/LWT` | Device availability (Online/Offline) |
 | `tasmota/discovery/+/config` | Tasmota device discovery (for MAC and name) |
 
@@ -168,11 +309,19 @@ The integration listens to and publishes on standard Tasmota MQTT topics:
 
 | Topic | Purpose | Example Payload |
 |-------|---------|-----------------|
-| `cmnd/{topic}/HVACSetHAMode` | Set HVAC mode | `heat`, `cool`, `auto` |
+| `cmnd/{topic}/HVACSetHAMode` | Set HVAC mode | `heat`, `cool`, `auto`, `off` |
 | `cmnd/{topic}/HVACSetTemp` | Set target temperature | `22` |
-| `cmnd/{topic}/HVACSetFanSpeed` | Set fan speed | `auto`, `quiet`, `1`, `2`, `3`, `4` |
-| `cmnd/{topic}/HVACSetSwingV` | Set vertical swing | `auto`, `up`, `up_middle`, `center`, `down_middle`, `down`, `swing` |
-| `cmnd/{topic}/HVACSetSwingH` | Set horizontal swing | `auto`, `left`, `left_middle`, `center`, `right_middle`, `right`, `split`, `swing` |
+| `cmnd/{topic}/HVACSetFanSpeed` | Set fan speed | `auto`, `quiet`, `1`–`4` |
+| `cmnd/{topic}/HVACSetSwingV` | Set vertical swing | `auto`, `up`, `center`, `down`, `swing` |
+| `cmnd/{topic}/HVACSetSwingH` | Set horizontal swing | `auto`, `left`, `center`, `right`, `swing` |
+| `cmnd/{topic}/HVACSetRemoteTemp` | Send external temperature | `21.5` |
+| `cmnd/{topic}/HVACSetRemoteTempClearTime` | Clear remote temp timeout | `0` |
+| `cmnd/{topic}/HVACSetPurify` | Toggle purifier | `on`, `off` |
+| `cmnd/{topic}/HVACSetNightMode` | Toggle night mode | `on`, `off` |
+| `cmnd/{topic}/HVACSetEconoCool` | Toggle EconoCool | `on`, `off` |
+| `cmnd/{topic}/HVACSetAirDirection` | Set i-See air direction | `auto`, `swing`, `even`, `direct` |
+
+> **Note:** `HVACSetRemoteTemp` and `HVACSetRemoteTempClearTime` replace the legacy `HVACRemoteTemp` / `HVACRemoteTempClearTime` commands from the pre-PR#24496 driver. The new driver (post-PR#24496) uses the `HVACSet*` prefix for all write commands.
 
 ## Troubleshooting
 
@@ -186,7 +335,7 @@ The integration listens to and publishes on standard Tasmota MQTT topics:
 
 2. **MiElHVAC Data**
    - Use MQTT Explorer to check if `tele/{topic}/SENSOR` contains `MiElHVAC` data
-   - The payload should include at least `Temperature`
+   - The payload should include at least one of: `Temperature` (legacy) or `RoomTemperature` (new driver)
 
 3. **Home Assistant Logs**
    - Check for discovery messages or errors
@@ -195,6 +344,15 @@ The integration listens to and publishes on standard Tasmota MQTT topics:
 4. **Tasmota Device Name**
    - Set a unique Device Name in Tasmota configuration
    - Restart Tasmota after changing the name
+
+### Extended Features Not Available
+
+Purifier, Night Mode, EconoCool and Air Direction require:
+
+1. A **recent Tasmota build** incorporating PR#24660 or later
+2. A unit that **supports run-state control** (`cap_run_state=true` in the `capabilities` attribute)
+
+Check the `capabilities` attribute of your climate entity to see what your unit supports.
 
 ### Climate Entity Not Linked to Tasmota Device
 
@@ -247,24 +405,21 @@ Device names come from Tasmota's "Device Name" setting. To customize:
 3. Restart Tasmota
 4. In Home Assistant, remove and recreate the integration
 
-### Horizontal Swing Control
+### Using Remote Temperature for Better Accuracy
 
-Horizontal swing is available as an attribute:
+If your HVAC unit's built-in sensor is inaccurate (common when the unit is behind furniture or in a corner), you can feed it a more accurate external reading via an automation. The driver will use this value instead of its own sensor until the timeout expires.
 
 ```yaml
-service: mqtt.publish
-data:
-  topic: cmnd/your_topic/HVACSetSwingH
-  payload: left
-```
-
-Or use it in automations:
-```yaml
-action:
-  - service: mqtt.publish
-    data:
-      topic: cmnd/{{ state_attr('climate.living_room_ac_hvac', 'friendly_name').lower() }}/HVACSetSwingH
-      payload: swing
+automation:
+  - alias: "Sync external temperature to HVAC"
+    trigger:
+      - platform: state
+        entity_id: sensor.living_room_temp
+    action:
+      - service: mqtt.publish
+        data:
+          topic: cmnd/living_room_hvac/HVACSetRemoteTemp
+          payload: "{{ states('sensor.living_room_temp') }}"
 ```
 
 ## Technical Details
@@ -303,7 +458,7 @@ action:
 1. Tasmota publishes device info to `tasmota/discovery/{MAC}/config`
 2. Integration caches device MAC address and name
 3. Tasmota publishes HVAC data to `tele/{topic}/SENSOR`
-4. Integration detects MiElHVAC data
+4. Integration detects MiElHVAC data (any of the known field names)
 5. Climate entity is created and linked to Tasmota device via MAC address
 6. Entity appears under the Tasmota device in Home Assistant
 
@@ -319,6 +474,20 @@ action:
 - Tasmota sends command to HVAC
 - Tasmota publishes new state
 - Home Assistant updates entity
+
+### Backward Compatibility
+
+The integration handles both legacy and new driver payload formats transparently. Field name changes introduced by the Tasmota driver between 2024 and 2026 are resolved using fallback lookups:
+
+| Old field | New field | Where |
+|---|---|---|
+| `Temperature` | `RoomTemperature` | `SENSOR` |
+| `Power` (string) | `PowerState` | `SENSOR` |
+| `Temp` | `SetTemperature` | `HVACSETTINGS` |
+| `HVACRemoteTemp` | `HVACSetRemoteTemp` | Command |
+| `HVACRemoteTempClearTime` | `HVACSetRemoteTempClearTime` | Command |
+
+No configuration change is needed when upgrading your Tasmota firmware.
 
 ## Support
 
@@ -362,6 +531,24 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Inspired by the Tasmota and Home Assistant communities
 
 ## Changelog
+
+### Version 2.0.0 (2026-05-01)
+
+**Driver compatibility updated** to cover all Tasmota MiElHVAC driver changes merged between February and April 2026 (PRs #24486, #24488, #24490, #24496, #24517, #24660). Full backward compatibility with the pre-PR#24486 driver is maintained.
+
+**New features:**
+- Energy monitoring: `power_usage_w` and `energy_total_kwh` state attributes (PR#24486)
+- Extended run-state controls: Purifier, Night Mode, EconoCool, i-See Air Direction (PR#24660)
+- Remote temperature: send an external sensor reading to the HVAC unit (PR#24517)
+- Outdoor temperature attribute (PR#24517 / #24660)
+- Unit capabilities exposed as `capabilities` attribute (PR#24660)
+
+**Breaking changes in Tasmota driver (handled transparently by this integration):**
+- `HVACSETTINGS.Temp` renamed to `HVACSETTINGS.SetTemperature` (PR#24490)
+- `SENSOR.MiElHVAC.Temperature` renamed to `SENSOR.MiElHVAC.RoomTemperature` (PR#24490)
+- `SENSOR.MiElHVAC.Power` (string) renamed to `SENSOR.MiElHVAC.PowerState` (PR#24490)
+- `HVACRemoteTemp` command renamed to `HVACSetRemoteTemp` (PR#24496)
+- `HVACRemoteTempClearTime` renamed to `HVACSetRemoteTempClearTime` (PR#24496)
 
 ### Version 1.0.0 (2026-02-04)
 - Initial public release
