@@ -13,7 +13,8 @@ MAX_TEMP = 31
 TEMP_STEP = 1.0
 PRECISION = 0.5
 
-# HVAC mode mapping: Tasmota → Home Assistant
+# HVAC mode mapping: Tasmota HAMode → Home Assistant
+# Compatible with pre-PR#24488 and post-PR#24488 driver
 HVAC_MODE_MAP: dict[str, HVACMode] = {
     "off": HVACMode.OFF,
     "auto": HVACMode.AUTO,
@@ -23,7 +24,7 @@ HVAC_MODE_MAP: dict[str, HVACMode] = {
     "fan_only": HVACMode.FAN_ONLY,
 }
 
-# Reverse mapping: Home Assistant → Tasmota
+# Reverse mapping: Home Assistant → Tasmota HAMode
 HVAC_MODE_REVERSE_MAP: dict[HVACMode, str] = {
     v: k for k, v in HVAC_MODE_MAP.items()
 }
@@ -62,3 +63,19 @@ SWING_H_MODES: list[str] = [
     "right",
     "swing",
 ]
+
+# New in PR#24660: Run-state feature modes (on/off)
+RUN_STATE_MODES: list[str] = ["on", "off"]
+
+# New in PR#24660: Air direction modes (i-See control)
+AIR_DIRECTION_MODES: list[str] = ["auto", "swing", "even", "direct"]
+
+# MQTT command topics (new naming post-PR#24496)
+# Old driver used: HVACRemoteTemp / HVACRemoteTempClearTime
+# New driver uses: HVACSetRemoteTemp / HVACSetRemoteTempClearTime
+HVAC_CMD_REMOTE_TEMP = "HVACSetRemoteTemp"
+HVAC_CMD_REMOTE_TEMP_CLEAR = "HVACSetRemoteTempClearTime"
+
+# Legacy commands (pre-PR#24496) – kept for backward compat if needed
+HVAC_CMD_REMOTE_TEMP_LEGACY = "HVACRemoteTemp"
+HVAC_CMD_REMOTE_TEMP_CLEAR_LEGACY = "HVACRemoteTempClearTime"
