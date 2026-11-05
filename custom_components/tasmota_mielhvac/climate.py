@@ -31,9 +31,11 @@ from homeassistant.components.mqtt.models import ReceiveMessage
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .const import (
     ACTION_MAP,
@@ -143,15 +145,15 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
         )
 
         # Temperature configuration (may be overridden by capabilities, PR#24660)
-        self._attr_temperature_unit = UnitOfTemperature.CELSIUS
+        self._attr_native_temperature_unit = UnitOfTemperature.CELSIUS
         self._attr_min_temp = MIN_TEMP
         self._attr_max_temp = MAX_TEMP
         self._attr_target_temperature_step = TEMP_STEP
         self._attr_precision = PRECISION
 
         # Current state
-        self._attr_current_temperature = None
-        self._attr_target_temperature = None
+        self._attr_native_current_temperature = None
+        self._attr_native_target_temperature = None
         self._attr_hvac_mode = HVACMode.OFF
         self._attr_hvac_action = HVACAction.OFF
         self._attr_fan_mode = "auto"
@@ -232,6 +234,38 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                 "Failed to request device info for %s: %s", self._device_id, err
             )
 
+    def _restore_native_temperature(
+        self, value: Any, unit: str | None
+    ) -> float | None:
+        """Convert a temperature restored from the last state to the native unit.
+
+        The state machine stores climate temperatures in the unit system
+        configured by the user, which is not necessarily the native unit
+        (Celsius) of this entity. Since HA 2026.11 the unit is exposed in the
+        "temperature_unit" state attribute; for older states, fall back to the
+        configured unit system, which is what the state was written in.
+        """
+        try:
+            temperature = float(value)
+        except (ValueError, TypeError):
+            return None
+
+        from_unit = unit or self.hass.config.units.temperature_unit
+        if from_unit == self._attr_native_temperature_unit:
+            return temperature
+        try:
+            return TemperatureConverter.convert(
+                temperature, from_unit, self._attr_native_temperature_unit
+            )
+        except (HomeAssistantError, ValueError):
+            _LOGGER.debug(
+                "Cannot restore temperature %s from unit %s for %s",
+                value,
+                from_unit,
+                self._device_id,
+            )
+            return None
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to MQTT topics and restore previous state."""
         # Restore previous state
@@ -243,7 +277,11 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                     self._last_on_mode = restored_mode
 
             if temp := last_state.attributes.get(ATTR_TEMPERATURE):
-                self._attr_target_temperature = float(temp)
+                self._attr_native_target_temperature = (
+                    self._restore_native_temperature(
+                        temp, last_state.attributes.get("temperature_unit")
+                    )
+                )
 
             if fan_mode := last_state.attributes.get("fan_mode"):
                 self._attr_fan_mode = fan_mode
@@ -298,7 +336,7 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                 room_temp = hvac_data.get("RoomTemperature") or hvac_data.get("Temperature")
                 if room_temp is not None:
                     try:
-                        self._attr_current_temperature = float(room_temp)
+                        self._attr_native_current_temperature = float(room_temp)
                         updated = True
                     except (ValueError, TypeError):
                         pass
@@ -404,7 +442,7 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                 set_temp = data.get("SetTemperature") or data.get("Temp")
                 if set_temp is not None:
                     try:
-                        self._attr_target_temperature = float(set_temp)
+                        self._attr_native_target_temperature = float(set_temp)
                         updated = True
                     except (ValueError, TypeError):
                         pass
@@ -566,7 +604,7 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
                 qos=1,
                 retain=False,
             )
-            self._attr_target_temperature = temperature
+            self._attr_native_target_temperature = temperature
             self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
