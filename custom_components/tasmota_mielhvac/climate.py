@@ -21,6 +21,7 @@ from typing import Any
 
 from homeassistant.components import mqtt
 from homeassistant.components.climate import (
+    ATTR_HVAC_MODE,
     ClimateEntity,
     ClimateEntityFeature,
     HVACAction,
@@ -595,7 +596,17 @@ class MiElHVACTasmota(ClimateEntity, RestoreEntity):
     # -------------------------------------------------------------------------
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set target temperature."""
+        """Set target temperature, and optionally the HVAC mode in the same call.
+
+        ``climate.set_temperature`` forwards ``hvac_mode`` to the entity, which
+        is responsible for applying it. The mode is sent first so that the unit
+        powers on directly in the requested mode, then the setpoint follows.
+        """
+        if (hvac_mode := kwargs.get(ATTR_HVAC_MODE)) is not None:
+            await self.async_set_hvac_mode(HVACMode(hvac_mode))
+            if hvac_mode == HVACMode.OFF:
+                return  # a setpoint is meaningless while the unit is off
+
         if temperature := kwargs.get(ATTR_TEMPERATURE):
             await mqtt.async_publish(
                 self.hass,
