@@ -194,6 +194,24 @@ Once discovered, you can control your HVAC through:
 3. **Automations** - Create climate-based automations
 4. **Voice Assistants** - Control via Alexa, Google Assistant, etc.
 
+### Set Mode and Temperature in One Call
+
+`climate.set_temperature` accepts an optional `hvac_mode`. The integration sends the mode first (`HVACSetHAMode`), then the target temperature (`HVACSetTemp`). If the unit is off, it powers on directly in the requested mode, so there is no need to call `climate.turn_on` first or to add a delay between calls.
+
+```yaml
+action: climate.set_temperature
+target:
+  entity_id: climate.living_room_hvac
+data:
+  temperature: 22
+  hvac_mode: heat
+```
+
+> **Notes**
+> - `climate.turn_on` restores the **last used mode** (`auto` if none is known). To be sure which mode is applied, set `hvac_mode` explicitly as above.
+> - With `hvac_mode: off`, the unit is switched off and the temperature, if provided, is ignored.
+> - The target temperature is sent to the device as a whole number (decimals are truncated).
+
 ### Extended Controls via Services
 
 Features like Purifier, Night Mode, EconoCool, Air Direction, and Remote Temperature are not yet exposed as native HA climate controls, but can be triggered via the `mqtt.publish` service or automations.
@@ -531,6 +549,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Inspired by the Tasmota and Home Assistant communities
 
 ## Changelog
+
+### Version 2.0.4 (2026-11-08)
+
+**Bug fix:**
+- `climate.set_temperature` now honours the `hvac_mode` parameter. Previously the mode was silently ignored and only `HVACSetTemp` was sent, so a call such as "temperature 22 + mode heat" left the unit in its previous mode (e.g. cool). The mode is now sent first (`HVACSetHAMode`), then the temperature (`HVACSetTemp`). With `hvac_mode: off`, only the off command is sent. (#1)
+
+**Documentation:**
+- New "Set Mode and Temperature in One Call" section, including how `climate.turn_on` chooses the mode to restore.
 
 ### Version 2.0.0 (2026-05-01)
 
